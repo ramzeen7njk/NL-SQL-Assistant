@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Natural Language SQL Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .database-selector {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .database-selector select {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            min-width: 200px;
+        }
+
+        .database-selector button {
+            padding: 0.5rem 1rem;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .database-selector button:hover {
+            background-color: #34495e;
+        }
+
+        .selected-database {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: relative;
+            background-color: white;
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .close {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .form-group input[type="text"] {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 1.2rem;
+            height: 1.2rem;
+        }
+
+        .modal-buttons {
+            position: sticky;
+            bottom: 0;
+            background-color: white;
+            padding-top: 1rem;
+            margin-top: 1rem;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        .modal-buttons button {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        .modal-buttons button.cancel {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .modal-buttons button.create {
+            background-color: #2c3e50;
+            color: white;
+        }
+
+        .modal-buttons button:hover {
+            opacity: 0.9;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: auto;
+        }
+
+        .assistant-message {
+            background-color: #f5f5f5;
+            margin-right: auto;
+        }
+
+        .input-container {
+            padding: 1rem;
+            background-color: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 1rem;
+        }
+
+        #messageInput {
+            flex-grow: 1;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        button {
+            padding: 0.8rem 1.5rem;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #34495e;
+        }
+
+        .sql-output {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: monospace;
+            margin-top: 0.5rem;
+            white-space: pre-wrap;
+        }
+
+        /* Add these new styles for result tables */
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .result-table th {
+            background-color: #2c3e50;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .result-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .result-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .result-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .result-table tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .no-results {
+            padding: 1rem;
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+        }
+
+        /* Add these new styles for the delete database modal */
+        .database-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 1rem 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .database-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .database-item:last-child {
+            border-bottom: none;
+        }
+
+        .database-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .database-item input[type="checkbox"] {
+            margin-right: 1rem;
+            width: 1.2rem;
+            height: 1.2rem;
+        }
+
+        .database-item label {
+            flex-grow: 1;
+            cursor: pointer;
+        }
+
+        .warning-text {
+            color: #dc3545;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .delete-all {
+            margin: 1rem 0;
+            padding: 0.5rem;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .delete-all input[type="checkbox"] {
+            width: 1.2rem;
+            height: 1.2rem;
+        }
+
+        .delete-all label {
+            color: #856404;
+            cursor: pointer;
+        }
+
+        .modal-buttons button.delete {
+            background-color: #dc3545;
+        }
+
+        .modal-buttons button.delete:hover {
+            background-color: #c82333;
+        }
+
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .success-message {
+            color: #28a745;
+            font-weight: 500;
+            padding: 0.5rem;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+        }
+
+        .show-details {
+            color: #007bff;
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 0.25rem 0;
+            display: inline-block;
+        }
+
+        .show-details:hover {
+            text-decoration: underline;
+        }
+
+        .query-details {
+            display: none;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+
+        .query-details pre {
+            margin: 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        /* Add loading animation styles */
+        .loading-container {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+
+        .loading-bar {
+            height: 4px;
+            background-color: #e9ecef;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background-color: #2c3e50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .loading-text {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .loading-steps {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .loading-step {
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .loading-step.completed {
+            color: #28a745;
+        }
+
+        .loading-step.active {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .loading-step.pending {
+            color: #6c757d;
+        }
+
+        .loading-step i {
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Natural Language SQL Assistant</h1>
+    </div>
+    <div class="container">
+        <div class="chat-container">
+            <div class="database-selector">
+                <select id="databaseSelect">
+                    <option value="">Select a database</option>
+                </select>
+                <button onclick="selectDatabase()">Select Database</button>
+                <button onclick="showNewDatabaseModal()">New Database</button>
+                <button onclick="showDeleteDatabaseModal()">Delete Database</button>
+                <button onclick="openVisualization()">Visualize Schema</button>
+                <span id="selectedDatabase" class="selected-database"></span>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="Type your SQL request in natural language..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Database Modal -->
+    <div id="newDatabaseModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeNewDatabaseModal()">&times;</span>
+            <h2>Create New Database</h2>
+            <form class="modal-form" onsubmit="createNewDatabase(event)">
+                <div class="form-group">
+                    <label for="newDatabaseName">Database Name:</label>
+                    <input type="text" id="newDatabaseName" required placeholder="Enter database name">
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="useNow" checked>
+                    <label for="useNow">Use this database after creation</label>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="cancel" onclick="closeNewDatabaseModal()">Cancel</button>
+                    <button type="submit" class="create">Create Database</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Database Modal -->
+    <div id="deleteDatabaseModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDeleteDatabaseModal()">&times;</span>
+            <h2>Delete Databases</h2>
+            <div class="delete-all">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <label for="selectAll">Select All Databases</label>
+            </div>
+            <div class="database-list" id="deleteDatabaseList">
+                <!-- Database items will be added here dynamically -->
+            </div>
+            <p class="warning-text">Warning: This action cannot be undone. All data in selected databases will be permanently deleted.</p>
+            <div class="modal-buttons">
+                <button type="button" class="cancel" onclick="closeDeleteDatabaseModal()">Cancel</button>
+                <button type="button" class="delete" onclick="deleteSelectedDatabases()">Delete Selected</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedDatabase = '';
+        let analysisInProgress = false;
+
+        // Fetch databases when page loads
+        window.onload = async function() {
+            await refreshDatabases();
+        };
+
+        async function refreshDatabases() {
+            try {
+                const response = await fetch('http://localhost:5000/databases');
+                const data = await response.json();
+                const select = document.getElementById('databaseSelect');
+                
+                // Clear existing options except the first one
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+                
+                data.databases.forEach(db => {
+                    const option = document.createElement('option');
+                    option.value = db;
+                    option.textContent = db;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching databases:', error);
+                addMessage({ error: 'Failed to fetch databases. Please try again.' });
+            }
+        }
+
+        function showNewDatabaseModal() {
+            document.getElementById('newDatabaseModal').style.display = 'block';
+        }
+
+        function closeNewDatabaseModal() {
+            document.getElementById('newDatabaseModal').style.display = 'none';
+            document.getElementById('newDatabaseName').value = '';
+        }
+
+        async function createNewDatabase(event) {
+            event.preventDefault();
+            
+            const dbName = document.getElementById('newDatabaseName').value;
+            const useNow = document.getElementById('useNow').checked;
+            
+            try {
+                const response = await fetch('http://localhost:5000/create_database', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        database: dbName,
+                        use_now: useNow
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage({ error: data.error });
+                } else {
+                    addMessage({ output: data.message });
+                    
+                    // Refresh database list
+                    await refreshDatabases();
+                    
+                    // If use_now is checked, select the new database
+                    if (useNow) {
+                        const select = document.getElementById('databaseSelect');
+                        select.value = dbName;
+                        selectDatabase();
+                    }
+                }
+                
+                closeNewDatabaseModal();
+            } catch (error) {
+                addMessage({ error: 'Failed to create database. Please try again.' });
+            }
+        }
+
+        function showLoadingAnimation() {
+            const loadingContainer = document.createElement('div');
+            loadingContainer.className = 'loading-container';
+            loadingContainer.id = 'loadingContainer';
+            loadingContainer.innerHTML = `
+                <div class="loading-bar">
+                    <div class="loading-progress" id="loadingProgress"></div>
+                </div>
+                <div class="loading-text">Analyzing database structure...</div>
+                <div class="loading-steps">
+                    <div class="loading-step" id="step1">
+                        <i class="fas fa-circle"></i>
+                        <span>Fetching tables</span>
+                    </div>
+                    <div class="loading-step" id="step2">
+                        <i class="fas fa-circle"></i>
+                        <span>Analyzing relationships</span>
+                    </div>
+                    <div class="loading-step" id="step3">
+                        <i class="fas fa-circle"></i>
+                        <span>Updating cache</span>
+                    </div>
+                </div>
+            `;
+            
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.appendChild(loadingContainer);
+            
+            // Start animation
+            const progress = document.getElementById('loadingProgress');
+            let width = 0;
+            const interval = setInterval(() => {
+                if (width >= 100) {
+                    clearInterval(interval);
+                } else {
+                    width += 2;
+                    progress.style.width = width + '%';
+                }
+            }, 50);
+        }
+
+        function updateLoadingSteps(steps) {
+            steps.forEach((step, index) => {
+                const stepElement = document.getElementById(`step${index + 1}`);
+                if (stepElement) {
+                    stepElement.className = `loading-step ${step}`;
+                }
+            });
+        }
+
+        function hideLoadingAnimation() {
+            const loadingContainer = document.getElementById('loadingContainer');
+            if (loadingContainer) {
+                loadingContainer.remove();
+            }
+        }
+
+        async function selectDatabase() {
+            const select = document.getElementById('databaseSelect');
+            selectedDatabase = select.value;
+            
+            if (selectedDatabase) {
+                document.getElementById('selectedDatabase').textContent = `Selected database: ${selectedDatabase}`;
+                
+                // Show loading animation
+                showLoadingAnimation();
+                analysisInProgress = true;
+                
+                try {
+                    const response = await fetch('http://localhost:5000/select_database', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ database: selectedDatabase })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        addMessage({ error: data.error });
+                    } else {
+                        // Update loading steps
+                        updateLoadingSteps(['completed', 'completed', 'completed']);
+                        
+                        // Add success message only once
+                        addMessage({ 
+                            output: `Database analysis complete. Found ${data.tables.length} table(s).`,
+                            message: "Database structure analyzed successfully."
+                        });
+                    }
+                } catch (error) {
+                    addMessage({ error: 'Failed to analyze database structure. Please try again.' });
+                } finally {
+                    // Hide loading animation
+                    hideLoadingAnimation();
+                    analysisInProgress = false;
+                }
+            } else {
+                document.getElementById('selectedDatabase').textContent = '';
+                addMessage({ error: 'Please select a database first.' });
+            }
+        }
+
+        function addMessage(content, isUser = false) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+            
+            if (typeof content === 'object') {
+                let messageContent = '<div class="message-content">';
+                
+                // Add success/error message
+                if (content.message) {
+                    messageContent += `<div class="success-message">${content.message}</div>`;
+                }
+                if (content.error) {
+                    messageContent += `<div class="error">${content.error}</div>`;
+                }
+                
+                // Add show details toggle if there's SQL
+                if (content.sql) {
+                    const detailsId = 'details-' + Date.now();
+                    messageContent += `
+                        <div class="show-details" onclick="toggleDetails('${detailsId}')">
+                            Show Query Details
+                        </div>
+                        <div id="${detailsId}" class="query-details">
+                            <pre>${content.sql}</pre>
+                        </div>
+                    `;
+                }
+                
+                // Add table output if present
+                if (content.output) {
+                    if (Array.isArray(content.output)) {
+                        if (content.output.length === 0) {
+                            messageContent += `<div class="no-results">No results found</div>`;
+                        } else {
+                            // Create table for array results
+                            const keys = Object.keys(content.output[0]);
+                            messageContent += '<table class="result-table">';
+                            
+                            // Add header row
+                            messageContent += '<tr>';
+                            keys.forEach(key => {
+                                messageContent += `<th>${key}</th>`;
+                            });
+                            messageContent += '</tr>';
+                            
+                            // Add data rows
+                            content.output.forEach(row => {
+                                messageContent += '<tr>';
+                                keys.forEach(key => {
+                                    messageContent += `<td>${row[key]}</td>`;
+                                });
+                                messageContent += '</tr>';
+                            });
+                            
+                            messageContent += '</table>';
+                        }
+                    } else {
+                        messageContent += `<div>${content.output}</div>`;
+                    }
+                }
+                
+                messageContent += '</div>';
+                messageDiv.innerHTML = messageContent;
+            } else {
+                messageDiv.textContent = content;
+            }
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function toggleDetails(detailsId) {
+            const details = document.getElementById(detailsId);
+            const toggle = details.previousElementSibling;
+            
+            if (details.style.display === 'none' || !details.style.display) {
+                details.style.display = 'block';
+                toggle.textContent = 'Hide Query Details';
+            } else {
+                details.style.display = 'none';
+                toggle.textContent = 'Show Query Details';
+            }
+        }
+
+        function openVisualization() {
+            if (!selectedDatabase) {
+                addMessage({ error: 'Please select a database first.' });
+                return;
+            }
+            window.open(`/visualize?database=${selectedDatabase}`, '_blank');
+        }
+
+        async function sendMessage() {
+            if (!selectedDatabase) {
+                addMessage({ error: 'Please select a database first.' });
+                return;
+            }
+
+            if (analysisInProgress) {
+                addMessage({ error: 'Please wait for database analysis to complete.' });
+                return;
+            }
+
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage(message, true);
+            input.value = '';
+            
+            // Check if the message is a visualization request
+            const visualizationKeywords = ['visualize', 'graph', 'diagram', 'schema', 'structure'];
+            const isVisualizationRequest = visualizationKeywords.some(keyword => 
+                message.toLowerCase().includes(keyword)
+            );
+            
+            if (isVisualizationRequest) {
+                openVisualization();
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        message,
+                        database: selectedDatabase
+                    })
+                });
+                
+                const data = await response.json();
+                addMessage(data);
+            } catch (error) {
+                addMessage({ error: 'Failed to connect to the server. Please try again.' });
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function showDeleteDatabaseModal() {
+            const modal = document.getElementById('deleteDatabaseModal');
+            const databaseList = document.getElementById('deleteDatabaseList');
+            
+            // Clear existing list
+            databaseList.innerHTML = '';
+            
+            // Get all databases except the currently selected one
+            const select = document.getElementById('databaseSelect');
+            const databases = Array.from(select.options)
+                .filter(option => option.value && option.value !== selectedDatabase)
+                .map(option => option.value);
+            
+            if (databases.length === 0) {
+                databaseList.innerHTML = '<div class="database-item">No databases available to delete</div>';
+                return;
+            }
+            
+            // Create list items
+            databases.forEach(db => {
+                const item = document.createElement('div');
+                item.className = 'database-item';
+                item.innerHTML = `
+                    <input type="checkbox" id="db_${db}" value="${db}">
+                    <label for="db_${db}">${db}</label>
+                `;
+                databaseList.appendChild(item);
+            });
+            
+            modal.style.display = 'block';
+        }
+
+        function closeDeleteDatabaseModal() {
+            document.getElementById('deleteDatabaseModal').style.display = 'none';
+            document.getElementById('selectAll').checked = false;
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('#deleteDatabaseList input[type="checkbox"]');
+            checkboxes.forEach(checkbox => checkbox.checked = selectAll.checked);
+        }
+
+        async function deleteSelectedDatabases() {
+            const checkboxes = document.querySelectorAll('#deleteDatabaseList input[type="checkbox"]:checked');
+            const databasesToDelete = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (databasesToDelete.length === 0) {
+                addMessage({ error: 'Please select at least one database to delete.' });
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/delete_databases', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        databases: databasesToDelete
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    addMessage({ error: data.error });
+                } else {
+                    addMessage({ output: data.message });
+                    
+                    // Refresh database list
+                    await refreshDatabases();
+                    
+                    // If the currently selected database was deleted, clear the selection
+                    if (databasesToDelete.includes(selectedDatabase)) {
+                        selectedDatabase = '';
+                        document.getElementById('selectedDatabase').textContent = '';
+                    }
+                }
+                
+                closeDeleteDatabaseModal();
+            } catch (error) {
+                addMessage({ error: 'Failed to delete databases. Please try again.' });
+            }
+        }
+    </script>
+</body>
+</html> 
